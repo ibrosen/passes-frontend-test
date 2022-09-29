@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLikesCount, getLikesUserStatus, postUserAddLike, postUserRemoveLike } from './api/likes';
 import './App.css';
 import LikeIcon from './components/LikeIcon';
+import { useDebounce } from './hooks/useDebounce';
 import { shortenLikeNumber } from './utils';
 
 const LIKE_DEBOUNCE_AMOUNT_MS = 300;
@@ -14,9 +15,26 @@ function App() {
     const [numLikes, setNumLikes] = useState(0);
     const [hasUserLiked, setHasUserLiked] = useState(false);
     // Track the last click of the button
-    // const [debounceLastCall, setDebounceLastCall] = useState(0);
     const [shouldPulse, setShouldPulse] = useState(false);
-    const updateLikeDebounceRef = useRef<NodeJS.Timeout>();
+
+    const updateLikes = useCallback(async () => {
+        console.log('calling');
+        try {
+            if (!hasUserLiked) {
+                await postUserAddLike(likeId, userId);
+            } else {
+                await postUserRemoveLike(likeId, userId);
+            }
+            setNumLikes(await getLikesCount(likeId));
+            setHasUserLiked(await getLikesUserStatus(likeId, userId));
+        } catch (e) {
+            // Catch and show an error toast
+            console.log(e);
+        }
+    }, [hasUserLiked, likeId, userId]);
+    const updateLikeDebouncer = useDebounce(updateLikes, 300);
+
+    useRef<NodeJS.Timeout>();
 
     useEffect(() => {
         const getInitLikeData = async () => {
@@ -30,14 +48,11 @@ function App() {
         };
 
         getInitLikeData();
-
     }, []);
 
 
     const onUserClick = useCallback(async () => {
-        const saveHasHuserLiked = hasUserLiked;
-
-        if (!saveHasHuserLiked) {
+        if (!hasUserLiked) {
             setHasUserLiked(true);
             setNumLikes(numLikes + 1);
         }
@@ -50,23 +65,8 @@ function App() {
         setTimeout(() => setShouldPulse(false), 400);
 
         // Debounced API call
-        clearTimeout(updateLikeDebounceRef.current);
-        updateLikeDebounceRef.current = setTimeout(async () => {
-            try {
-                if (!saveHasHuserLiked) {
-                    await postUserAddLike(likeId, userId);
-                } else {
-                    await postUserRemoveLike(likeId, userId);
-                }
-                setNumLikes(await getLikesCount(likeId));
-                setHasUserLiked(await getLikesUserStatus(likeId, userId));
-            } catch (e) {
-                // Catch and show an error toast
-                console.log(e);
-            }
-        }, LIKE_DEBOUNCE_AMOUNT_MS);
-
-    }, [userId, likeId, hasUserLiked]);
+        updateLikeDebouncer();
+    }, [updateLikeDebouncer, hasUserLiked, numLikes]);
 
     return (
         <div className="app">
