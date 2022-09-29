@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getLikesCount, getLikesUserStatus, postUserAddLike, postUserRemoveLike } from './api/likes';
 import './App.css';
 import LikeIcon from './components/LikeIcon';
@@ -33,8 +33,6 @@ function App() {
         }
     }, [hasUserLiked, likeId, userId]);
     const updateLikeDebouncer = useDebounce(updateLikes, 300);
-
-    useRef<NodeJS.Timeout>();
 
     useEffect(() => {
         const getInitLikeData = async () => {
