@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLikesCount, getLikesUserStatus, postUserAddLike, postUserRemoveLike } from './api/likes';
 import './App.css';
 import LikeIcon from './components/LikeIcon';
@@ -14,8 +14,9 @@ function App() {
     const [numLikes, setNumLikes] = useState(0);
     const [hasUserLiked, setHasUserLiked] = useState(false);
     // Track the last click of the button
-    const [debounceLastCall, setDebounceLastCall] = useState(0);
+    // const [debounceLastCall, setDebounceLastCall] = useState(0);
     const [shouldPulse, setShouldPulse] = useState(false);
+    const updateLikeDebounceRef = useRef<NodeJS.Timeout>();
 
     useEffect(() => {
         const getInitLikeData = async () => {
@@ -34,31 +35,38 @@ function App() {
 
 
     const onUserClick = useCallback(async () => {
-        // If < 300ms has passed since last click, do nothing
-        if (Date.now() - debounceLastCall < LIKE_DEBOUNCE_AMOUNT_MS) return;
+        const saveHasHuserLiked = hasUserLiked;
 
-        try {
-            if (!hasUserLiked) {
-                await postUserAddLike(likeId, userId);
-                setHasUserLiked(true);
-            } else {
-                await postUserRemoveLike(likeId, userId);
-                setHasUserLiked(false);
-            }
-            setNumLikes(await getLikesCount(likeId));
-            // Set new debounce last time
-            setDebounceLastCall(Date.now());
-
-            // Toggle the pulse animation on the heart
-            setShouldPulse(true);
-            setTimeout(() => setShouldPulse(false), 400);
-
-        } catch (e) {
-            // Catch and show an error toast
-            console.log(e);
+        if (!saveHasHuserLiked) {
+            setHasUserLiked(true);
+            setNumLikes(numLikes + 1);
         }
+        else {
+            setHasUserLiked(false);
+            setNumLikes(numLikes - 1);
+        }
+        // Toggle the pulse animation on the heart
+        setShouldPulse(true);
+        setTimeout(() => setShouldPulse(false), 400);
 
-    }, [userId, likeId, hasUserLiked, debounceLastCall]);
+        // Debounced API call
+        clearTimeout(updateLikeDebounceRef.current);
+        updateLikeDebounceRef.current = setTimeout(async () => {
+            try {
+                if (!saveHasHuserLiked) {
+                    await postUserAddLike(likeId, userId);
+                } else {
+                    await postUserRemoveLike(likeId, userId);
+                }
+                setNumLikes(await getLikesCount(likeId));
+                setHasUserLiked(await getLikesUserStatus(likeId, userId));
+            } catch (e) {
+                // Catch and show an error toast
+                console.log(e);
+            }
+        }, LIKE_DEBOUNCE_AMOUNT_MS);
+
+    }, [userId, likeId, hasUserLiked]);
 
     return (
         <div className="app">
